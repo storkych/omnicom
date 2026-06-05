@@ -99,22 +99,20 @@ ssh -i ~/.ssh/omnicom_deploy deploy@ТВОЙ_IP
 - `CORS_ORIGIN=https://omnicanal.storkyproduct.ru`
 - `NPM_REGISTRY=https://registry.npmmirror.com` (для Москвы)
 
-Закодируй весь файл в base64 (для GitHub Secret):
-
-**Linux / macOS / Git Bash:**
+Положи файл **один раз на сервер** (CI/CD его не перезаписывает):
 
 ```bash
-base64 -w0 .env.production > .env.b64
-cat .env.b64
+cd /opt/omnicom
+cp deploy/production.env.example .env
+nano .env   # заполни пароли, токен бота и т.д.
+chmod 600 .env
 ```
 
-**PowerShell (Windows):**
+Чтобы поменять секреты позже — правишь `.env` на сервере вручную и перезапускаешь:
 
-```powershell
-[Convert]::ToBase64String([IO.File]::ReadAllBytes(".env.production"))
+```bash
+docker compose -f docker-compose.yml up -d --build
 ```
-
-Скопируй вывод — это значение для секрета `PRODUCTION_ENV_B64`.
 
 ---
 
@@ -129,7 +127,8 @@ cat .env.b64
 | `SSH_PRIVATE_KEY` | содержимое `omnicom_deploy` | Приватный ключ целиком |
 | `SSH_PORT` | `22` | Порт SSH (если не 22) |
 | `DEPLOY_PATH` | `/opt/omnicom` | Путь к проекту на сервере |
-| `PRODUCTION_ENV_B64` | длинная base64-строка | Весь `.env` в base64 |
+
+`.env` **не** хранится в GitHub — только на сервере в `/opt/omnicom/.env`.
 
 ---
 
@@ -190,9 +189,8 @@ sudo nginx -t && sudo systemctl reload nginx
 
 1. GitHub Actions подключается по SSH
 2. `git pull` в `/opt/omnicom`
-3. Записывает `.env` из `PRODUCTION_ENV_B64`
-4. `docker compose build && up -d`
-5. Проверяет `/health` и фронт
+3. `docker compose build && up -d` (читает `.env` с сервера)
+4. Проверяет `/health` и фронт
 
 Ручной запуск: **Actions** → **Deploy to production** → **Run workflow**
 

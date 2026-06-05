@@ -29,9 +29,10 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            echo ">>> write .env"
-            echo "${{ secrets.PRODUCTION_ENV_B64 }}" | base64 -d > .env
-            chmod 600 .env
+            if [ ! -f .env ]; then
+              echo "ERROR: .env not found on server. Create it once: cp deploy/production.env.example .env && nano .env"
+              exit 1
+            fi
 
             echo ">>> docker compose build & up"
             docker compose -f docker-compose.yml build
