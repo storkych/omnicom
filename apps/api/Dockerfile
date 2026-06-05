@@ -57,4 +57,5 @@ COPY --from=build /app/apps/api/prisma ./apps/api/prisma
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 EXPOSE 4000
 # Sync the schema to the database, then start the server.
-CMD ["sh", "-c", "npx --workspace @omnicom/api prisma db push --skip-generate --accept-data-loss && node apps/api/dist/main.js"]
+# Prod image has no root package.json — run prisma from apps/api directly.
+CMD ["sh", "-c", "cd apps/api && npx prisma db push --skip-generate --accept-data-loss && node dist/main.js"]
