@@ -1,0 +1,33 @@
+# dependencies
+node_modules/
+**/node_modules/
+
+# build output
+dist/
+build/
+.next/
+out/
+**/dist/
+**/.next/
+
+# env
+.env
+.env.local
+*.local
+
+# prisma
+apps/api/prisma/migrations/dev.db*
+
+# logs
+*.log
+npm-debug.log*
+
+# os / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# telegram session dumps (just in case)
+*.session

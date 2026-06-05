@@ -1,0 +1,30 @@
+{
+  "name": "omnicom",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Omnichannel communication platform with Telegram (personal account) integration",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build:shared": "npm run build --workspace @omnicom/shared",
+    "dev:infra": "docker compose -f docker-compose.infra.yml up -d",
+    "dev:infra:down": "docker compose -f docker-compose.infra.yml down",
+    "dev:stop": "powershell -NoProfile -Command \"3006,4000,4099 | ForEach-Object { Get-NetTCPConnection -LocalPort $_ -ErrorAction SilentlyContinue } | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }; exit 0\"",
+    "dev:db": "dotenv -e .env -- cross-env DATABASE_URL=postgresql://postgres:1317@localhost:5432/omnicom?schema=public npx --workspace @omnicom/api prisma db push --skip-generate",
+    "dev:api": "dotenv -e .env -- cross-env API_PORT=4000 DATABASE_URL=postgresql://postgres:1317@localhost:5432/omnicom?schema=public REDIS_URL=redis://localhost:6379 CORS_ORIGIN=http://localhost:3006 npm run start:dev --workspace @omnicom/api",
+    "dev:web": "dotenv -e .env -- cross-env NEXT_PUBLIC_API_URL=http://localhost:4000 PORT=3006 npm run dev --workspace @omnicom/web",
+    "dev:local": "npm run dev:stop && npm run build:shared && npm run dev:db && concurrently -n api,web -c blue,green \"npm run dev:api\" \"npm run dev:web\"",
+    "build": "npm run build --workspace @omnicom/shared && npm run build --workspace @omnicom/api && npm run build --workspace @omnicom/web",
+    "lint": "echo \"run lint per workspace\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "dotenv-cli": "^7.4.4"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

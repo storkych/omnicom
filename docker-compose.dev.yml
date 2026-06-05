@@ -1,0 +1,125 @@
+# Development stack with hot-reload.
+#
+# No custom image build for api/web — uses node:20 directly.
+# Dependencies install ONCE into a shared volume (deps service), then reused.
+#
+#   docker compose -f docker-compose.dev.yml up
+#
+# First run: deps installs npm packages (~5-10 min on slow networks).
+# Next runs: start in seconds (volume already has node_modules).
+#
+# For fastest dev on Windows, use instead:
+#   docker compose -f docker-compose.infra.yml up -d && npm run dev:local
+#
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-omnicom}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-omnicom}
+      POSTGRES_DB: ${POSTGRES_DB:-omnicom}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-omnicom}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # One-shot: install node_modules into shared volume (skipped on subsequent runs).
+  deps:
+    image: node:20-bookworm-slim
+    working_dir: /app
+    volumes:
+      - .:/app
+      - dev_node_modules:/app/node_modules
+    environment:
+      NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
+    command: >
+      sh -c "apt-get update -qq && apt-get install -y -qq openssl > /dev/null &&
+             if [ ! -f node_modules/.docker-ready ]; then
+               echo '>>> First run: installing npm packages (one time)...' &&
+               npm config set registry \"$${NPM_REGISTRY}\" &&
+               npm config set fetch-retries 5 &&
+               npm config set fetch-timeout 600000 &&
+               npm install --no-audit --no-fund &&
+               touch node_modules/.docker-ready &&
+               echo '>>> npm install done';
+             else
+               echo '>>> node_modules OK, skipping install';
+             fi"
+
+  api:
+    image: node:20-bookworm-slim
+    working_dir: /app
+    restart: unless-stopped
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: ${DATABASE_URL:-postgresql://omnicom:omnicom@postgres:5432/omnicom?schema=public}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      JWT_SECRET: ${JWT_SECRET:-dev_secret}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      SESSION_ENC_KEY: ${SESSION_ENC_KEY}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_PROXY_URL: ${TELEGRAM_PROXY_URL}
+      API_PORT: ${API_PORT:-4000}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+    ports:
+      - '${API_PORT:-4000}:4000'
+    volumes:
+      - .:/app
+      - dev_node_modules:/app/node_modules
+    command: >
+      sh -c "apt-get update -qq && apt-get install -y -qq openssl > /dev/null &&
+             npx --workspace @omnicom/api prisma generate &&
+             npx --workspace @omnicom/api prisma db push --accept-data-loss &&
+             npm run build --workspace @omnicom/shared &&
+             npm run start:dev --workspace @omnicom/api"
+
+  web:
+    image: node:20-bookworm-slim
+    working_dir: /app
+    restart: unless-stopped
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      api:
+        condition: service_started
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+      WATCHPACK_POLLING: 'true'
+    ports:
+      - '${WEB_PORT:-3000}:3000'
+    volumes:
+      - .:/app
+      - dev_node_modules:/app/node_modules
+      - web_next:/app/apps/web/.next
+    command: npm run dev --workspace @omnicom/web
+
+volumes:
+  pgdata_dev:
+  dev_node_modules:
+  web_next:

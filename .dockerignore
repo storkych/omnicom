@@ -1,0 +1,35 @@
+# Never send these to the Docker build context.
+# Keeps the context small and prevents host (Windows) node_modules / build
+# artifacts from leaking into the Linux containers.
+
+**/node_modules
+node_modules
+
+# build output
+**/dist
+**/.next
+**/out
+apps/web/.next
+apps/api/dist
+packages/shared/dist
+
+# git & editor
+.git
+.gitignore
+.idea
+.vscode
+
+# env & secrets (compose passes env at runtime)
+.env
+*.local
+
+# logs
+*.log
+npm-debug.log*
+
+# prisma local sqlite, if any
+*.session
+*.sqlite
+
+# docs/plans not needed in image
+*.md
