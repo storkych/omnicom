@@ -2,7 +2,11 @@
 FROM node:20-bookworm-slim AS base
 WORKDIR /app
 
+# Copy ALL workspace manifests (npm workspaces needs every package.json)
 COPY package.json package-lock.json* ./
+COPY tsconfig.base.json ./
+COPY packages/shared/package.json ./packages/shared/
+COPY apps/api/package.json ./apps/api/
 COPY apps/web/package.json ./apps/web/
 
 # ---------- deps ----------
@@ -15,7 +19,7 @@ RUN npm config set registry "$NPM_REGISTRY" \
   && npm config set fetch-retry-mintimeout 20000 \
   && npm config set fetch-retry-maxtimeout 120000 \
   && npm config set fetch-timeout 600000 \
-  && npm install --no-audit --no-fund
+  && npm ci --no-audit --no-fund
 
 # ---------- dev ----------
 # Used by docker-compose.dev.yml with source mounted as a volume.
