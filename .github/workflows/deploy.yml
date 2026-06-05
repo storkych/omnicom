@@ -1,0 +1,48 @@
+name: Deploy to production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd "${{ secrets.DEPLOY_PATH }}"
+
+            echo ">>> git pull"
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo ">>> write .env"
+            echo "${{ secrets.PRODUCTION_ENV_B64 }}" | base64 -d > .env
+            chmod 600 .env
+
+            echo ">>> docker compose build & up"
+            docker compose -f docker-compose.yml build
+            docker compose -f docker-compose.yml up -d --remove-orphans
+
+            echo ">>> prune dangling images"
+            docker image prune -f
+
+            echo ">>> health check"
+            sleep 15
+            curl -fsS http://127.0.0.1:4000/health
+            curl -fsS -o /dev/null http://127.0.0.1:3000/
+
+            echo ">>> deploy OK"
